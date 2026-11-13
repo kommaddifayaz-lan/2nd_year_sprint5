@@ -88,7 +88,7 @@ def create_token(username, token_type):
     payload = {
         "username": username,
         "token_type": token_type,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=time)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRY)
     }
     token = jwt.encode(payload=payload, key=SECRET_KEY, algorithm=ALGORITHM)
     return token
@@ -182,7 +182,7 @@ def get_package(package_id):
    
 #3) Partially update package details
 
-def update_package(package_id, package_name=None, destination=None, weight=None,arrival_date=None, status=None):
+def update_package(package_id, package_name=None, destination=None, weight=None, status=None):
     session = Session(engine)
     package = session.query(Packages).filter(Packages.id == package_id).first()
     if package is None:
@@ -194,8 +194,6 @@ def update_package(package_id, package_name=None, destination=None, weight=None,
         package.destination = destination
     if weight is not None:
         package.weight = weight
-    if arrival_date is not None:
-        package.arrival_date = arrival_date
     if status is not None:
         package.status = status
     session.commit()

@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException , Header , Body
+from fastapi import FastAPI, HTTPException , Header 
 from fastapi.middleware.cors import CORSMiddleware
 import functions
-from datetime import datetime
+from pydantic import BaseModel, Field
 
 app = FastAPI()
 
@@ -15,9 +15,40 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+#Pydantic Models
+class LoginData(BaseModel):
+    username: str
+    password: str
+
+class RegisterData(BaseModel):
+    user_name: str
+    password: str
+
+
+class PackageData(BaseModel):
+    package_name: str
+    destination: str
+    weight: float = Field(gt=0)
+
+
+class PackageUpdate(BaseModel):
+    package_name: str = None
+    destination: str = None
+    weight: float = Field(default=None, gt=0)
+    status: str = None
+
+
+class DispatchBatchData(BaseModel):
+    destination: str
+    vehicle_number: str
+    package_ids: list[int]
+
+
+
+
 @app.post("/login")
-def login(username= Body() ,password= Body()):
-    token = functions.verify_login(username=username,password=password)
+def login(data: LoginData):
+    token = functions.verify_login(username=data.username,password=data.password)
     if not token:
          raise HTTPException(status_code=401, detail="Invalid credentials")
     return token
@@ -32,8 +63,8 @@ def refresh(refresh_token = Header(None)):
     return {"access_token": access_token}
 
 @app.post("/register")
-def register_user(user_name = Body(), password = Body()):
-    if functions.register_user(user_name=user_name, password=password):
+def register_user(data: RegisterData):
+    if functions.register_user(user_name=data.user_name, password=data.password):
         return {"message": "user registered successfully"}
     raise HTTPException(status_code=400, detail="user already exists")
 
@@ -47,15 +78,13 @@ def get_packages(token: str = Header(None)):
 # 1.
 
 @app.post("/Packages")
-def register_package(package_name: str, destination: str, weight: float, token: str  = Header(None)):
+def register_package(data: PackageData, token: str  = Header(None)):
     username = functions.verify_token(token=token,token_type="access")  
     if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
-    if weight <= 0:
-        raise HTTPException(status_code=422, detail="Weight must be a positive number.")
-    if not package_name or not destination:
+    if not data.package_name or not data.destination:
         raise HTTPException(status_code=422, detail="Package name and destination cannot be empty.")
-    return functions.register_package(package_name, destination, weight)
+    return functions.register_package(data.package_name, data.destination, data.weight)
 
 # 2.
 
@@ -74,17 +103,15 @@ def get_package(package_id: int,token: str  = Header(None)):
 # 3.
 
 @app.patch("/Packages/{package_id}")
-def update_package(package_id: int, package_name: str = None, destination: str = None, weight: float = None, arrival_date: str = None, status: str = None, token: str  = Header(None)):
+def update_package(package_id: int,data: PackageUpdate, token: str  = Header(None)):
     username = functions.verify_token(token=token,token_type="access")
     if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
     if package_id <= 0:
         raise HTTPException(status_code=422, detail="Invalid package ID. It must be a positive integer.")
-    if weight is not None and weight <= 0:
-        raise HTTPException(status_code=422, detail="Weight must be a positive number.")
-    if status is not None and status not in ["pending", "dispatched"]:
+    if data.status is not None and data.status not in ["pending", "dispatched"]:
         raise HTTPException(status_code=422, detail="Invalid status")
-    response = functions.update_package(package_id, package_name, destination, weight, arrival_date, status)
+    response = functions.update_package(package_id, data.package_name, data.destination, data.weight, data.status)
     if response is None:    
         raise HTTPException(status_code=404, detail="Package not found.")       
     return response
@@ -105,7 +132,7 @@ def delete_package(package_id: int,token: str = Header(None)):
 
 # 5. 
 
-@app.get("/packages/search")
+@app.get("/Packages/search")
 def get_search_packages(destination: str=None, status:str=None, arrival_date:str=None,token: str = Header(None)):
     username = functions.verify_token(token=token,token_type="access")
     if not username:
@@ -127,7 +154,7 @@ def get_dispatch_batches(destination: str = None,vehicle_number: str = None,disp
 
 # 7. 
 
-@app.get("/wharehouse_statastics")
+@app.get("/Wharehouse/Statistics")
 def warehouse_statistics(token: str = Header(None)):
 
     username = functions.verify_token(token=token, token_type="access")
@@ -138,14 +165,14 @@ def warehouse_statistics(token: str = Header(None)):
 # 8. 
 
 @app.post("/DispatchBatches")
-def create_dispatch_batch(destination: str,vehicle_number: str,package_ids: list[int],token: str = Header(None)):
+def create_dispatch_batch(data: DispatchBatchData,token: str = Header(None)):
     username = functions.verify_token(token=token, token_type="access")
     if not username:
         raise HTTPException(status_code=401, detail="Invalid token")
-    if not destination or not vehicle_number:
+    if not data.destination or not data.vehicle_number:
         raise HTTPException(status_code=422, detail="Destination and vehicle number cannot be empty.")
-    if not package_ids:
+    if not data.package_ids:
         raise HTTPException(status_code=422, detail="Please provide package IDs.")
 
-    return functions.create_dispatch_batch(destination,vehicle_number,package_ids)
+    return functions.create_dispatch_batch(data.destination,data.vehicle_number,data.package_ids)
     
